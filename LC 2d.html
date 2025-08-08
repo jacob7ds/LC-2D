@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Mansion Loot Run</title>
+<style>
+  body { background: #222; color: white; text-align: center; margin: 0; }
+  canvas { background: #444; display: block; margin: auto; }
+  #score { font-size: 20px; margin: 10px; }
+  button { font-size: 18px; padding: 10px 20px; margin-top: 15px; }
+</style>
+</head>
+<body>
+<h1>Mansion Loot Run</h1>
+<div id="score">Score: 0</div>
+<canvas id="game" width="800" height="600"></canvas>
+<div id="gameover" style="display:none;">
+  <h2>Game Over</h2>
+  <div id="finalScore"></div>
+  <button onclick="startGame()">Restart</button>
+</div>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+let player, teammates, monsters, loot, score, gameOver, spectator;
+
+function randomPos() {
+  return { x: Math.random() * (canvas.width-20), y: Math.random() * (canvas.height-20) };
+}
+
+function startGame() {
+  document.getElementById("gameover").style.display = "none";
+  player = { ...randomPos(), size: 15, color: "blue", alive: true };
+  teammates = [];
+  for (let i = 0; i < 3; i++) { // Start with 3 teammates
+    teammates.push({ ...randomPos(), size: 15, color: "green", alive: true, lootCount: 0 });
+  }
+  monsters = [];
+  for (let i = 0; i < 4; i++) {
+    monsters.push({ ...randomPos(), size: 15, color: "red" });
+  }
+  loot = [];
+  for (let i = 0; i < 8; i++) {
+    loot.push({ ...randomPos(), size: 8, color: "yellow" });
+  }
+  score = 0;
+  gameOver = false;
+  spectator = false;
+  loop();
+}
+
+function spawnLoot() {
+  loot.push({ ...randomPos(), size: 8, color: "yellow" });
+}
+
+function drawEntity(e) {
+  ctx.fillStyle = e.color;
+  ctx.fillRect(e.x, e.y, e.size, e.size);
+}
+
+function drawLoot(l) {
+  ctx.beginPath();
+  ctx.arc(l.x, l.y, l.size, 0, Math.PI*2);
+  ctx.fillStyle = l.color;
+  ctx.fill();
+}
+
+function movePlayer(keys) {
+  if (!player.alive) return;
+  if (keys["ArrowUp"]) player.y -= 3;
+  if (keys["ArrowDown"]) player.y += 3;
+  if (keys["ArrowLeft"]) player.x -= 3;
+  if (keys["ArrowRight"]) player.x += 3;
+}
+
+function dist(a,b) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function moveTeammates() {
+  teammates.forEach(t => {
+    if (!t.alive) return;
+    let target = loot[Math.floor(Math.random() * loot.length)];
+    if (target) {
+      let dx = target.x - t.x;
+      let dy = target.y - t.y;
+      let d = Math.hypot(dx, dy);
+      if (d > 1) {
+        t.x += dx / d;
+        t.y += dy / d;
+      }
+      if (d < t.size) {
+        loot.splice(loot.indexOf(target), 1);
+        score += 5;
+        t.lootCount++;
+        if (t.lootCount % 5 === 0 && Math.random() < 0.25) {
+          t.alive = false; // Knocked out
+        }
+        spawnLoot();
+      }
+    }
+  });
+}
+
+function moveMonsters() {
+  monsters.forEach(m => {
+    let target = player.alive ? player : teammates.find(t=>t.alive);
+    if (!target) return;
+    let dx = target.x - m.x;
+    let dy = target.y - m.y;
+    let d = Math.hypot(dx, dy);
+    if (d < 200) {
+      m.x += (dx / d) * 1.5;
+      m.y += (dy / d) * 1.5;
+    } else {
+      m.x += (Math.random()-0.5)*2;
+      m.y += (Math.random()-0.5)*2;
+    }
+    if (d < target.size) {
+      target.alive = false;
+      if (target === player) spectator = true;
+    }
+  });
+}
+
+function checkLootPickup() {
+  if (!player.alive) return;
+  loot.forEach((l, i) => {
+    if (dist(player, l) < player.size) {
+      loot.splice(i, 1);
+      score += 10;
+      spawnLoot();
+    }
+  });
+}
+
+function updateScore() {
+  document.getElementById("score").innerText = "Score: " + score;
+}
+
+function loop() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  moveTeammates();
+  moveMonsters();
+  checkLootPickup();
+  drawEntity(player);
+  teammates.forEach(drawEntity);
+  loot.forEach(drawLoot);
+  monsters.forEach(drawEntity);
+  updateScore();
+
+  if (!player.alive && teammates.every(t=>!t.alive) && !gameOver) {
+    gameOver = true;
+    document.getElementById("gameover").style.display = "block";
+    document.getElementById("finalScore").innerText = "Final Score: " + score;
+    return;
+  }
+
+  requestAnimationFrame(loop);
+}
+
+let keys = {};
+document.addEventListener("keydown", e => keys[e.key] = true);
+document.addEventListener("keyup", e => keys[e.key] = false);
+setInterval(() => movePlayer(keys), 16);
+
+startGame();
+</script>
+</body>
+</html>
